@@ -1,0 +1,13 @@
+{
+  "name": "any-loader",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "^23.6.0"
+  },
+  "dependencies": {
+    "bluebird": "^3.5.3",
+    "deepmerge": "^2.2.1"
+  }
+}
