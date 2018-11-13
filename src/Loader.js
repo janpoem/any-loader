@@ -320,7 +320,7 @@ class Loader {
 					callbackReturn(this.beforeLoad, this, [loadStream]).then((/* ignore here */) => {
 						callbackReturn(this.doLoad, this, [loadStream]).then((/* ignore here */) => {
 							callbackReturn(this.afterLoad, this, [loadStream]).then((/* ignore here */) => {
-								resolve(this.result);
+								resolve(loadStream);
 							}).catch(err => {
 								this.handleError(err, ProcessAfter, reject);
 							});
