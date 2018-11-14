@@ -1,6 +1,11 @@
 {
   "name": "any-loader",
   "version": "0.0.1",
+  "description": "Middleware of data loader",
+  "keywords": [
+    "data loader",
+    "data loader middleware"
+  ],
   "main": "index.js",
   "license": "MIT",
   "scripts": {
