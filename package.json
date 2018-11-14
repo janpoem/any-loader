@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "main": "index.js",
   "license": "MIT",
+  "scripts": {
+    "test": "jest Loader.test.js"
+  },
   "devDependencies": {
     "jest": "^23.6.0"
   },

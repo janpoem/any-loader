@@ -267,4 +267,6 @@ class MyLoader extends Loader {
 ```  
  
 在将一个 `new Promise` 的实例提供给别人使用时，存在许多技术黑洞和坑（不同JS平台的实现和当前ES的Promise实现的版本的缺陷导致），所以本类库已经转用 bluebird 所提供的 Promise。
+
+
  

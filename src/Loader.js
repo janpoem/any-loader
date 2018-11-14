@@ -59,14 +59,6 @@ const isString = (value) => {
 	       (type === 'object' && value != null && !isArray(value) && toString.call(value) === '[object String]');
 };
 
-const ProcessSetup = 'setup';
-const ProcessBefore = 'before';
-const ProcessDoing = 'doing';
-const ProcessAfter = 'after';
-
-const TypeOther = 0;
-const TypeError = 1;
-const TypeString = 2;
 
 class LoadStreamError extends Error {
 	
@@ -120,6 +112,10 @@ class LoadStreamError extends Error {
 	}
 }
 
+const ProcessSetup = 'setup';
+const ProcessBefore = 'before';
+const ProcessDoing = 'doing';
+const ProcessAfter = 'after';
 
 /**
  * 数据库加载器的抽象类
