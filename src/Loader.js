@@ -24,9 +24,9 @@ const callbackReturn = (callback, binder, args) => {
 	} else if (callback instanceof Error) {
 		return Promise.reject(callback);
 	}
-	// else if (callback instanceof OrigPromise) {
-	// 	return new Promise(callback); // 原生的 Promise 对象，要强制转换一下
-	// }
+	else if (callback instanceof OrigPromise) {
+		return new Promise(callback); // 原生的 Promise 对象，要强制转换一下
+	}
 	else if (callback instanceof Promise) {
 		return callback;
 	} else {
@@ -56,7 +56,6 @@ const TypeString = 2;
  * - 考虑到精简核心类的代码，以及面向AOP、OOP编程特性的实现，不考虑实现面向事件的实现了。实际上这不是 `Loader` 这个层面要去解决的问题，完全可以在子类中自行实现。
  *
  * @type Loader
- * @property {array} errors
  * @property {{}} args
  */
 class Loader {
@@ -67,11 +66,6 @@ class Loader {
 	 * @param {*} args 调用 loader 的初始化参数
 	 */
 	constructor(args = undefined) {
-		this.result = {};
-
-		if (!isArray(this.errors))
-			this.errors = [];
-
 		Object.defineProperties(this, {
 			args: {
 				value:        this.initArgs(args),
@@ -216,6 +210,22 @@ class Loader {
 		}
 	}
 
+	_handleError(error, process, stream = {}) {
+		// 过滤一下 error ，确使每个 error 都是 Error 实例
+		if (!(error instanceof Error)) error = new Error(error + '');
+
+		stream = this.getPlainObject(stream, {});
+		if (!isArray(stream.errors)) stream.errors = [];
+		stream.errors.push(error); // 不管三七二十一，错误都放入堆栈
+		stream.error = error; // 绑定当前的错误
+
+		if (this.isThrowError(error, process)) {
+			throw error; // 直接抛出错误，简单暴力解决问题
+		}
+
+		return this;
+	}
+
 	/**
 	 * 生成一个新的 LoadStream
 	 *
@@ -234,20 +244,39 @@ class Loader {
 	 * @param {{}|undefined} output
 	 */
 	newLoadStream(input = undefined, output = undefined) {
-		input = this.newInput(input);
-		output = this.newOutput(input, output);
-		const stream = {input, output, errors: []};
-		return new Promise((resolve) => {
-			try {
-				Promise.resolve(this.setup(stream)).catch(error => {
-					this.handleError(error, ProcessSetup, null, stream.errors);
-				}).finally((/* ignore */) => {
-					resolve(stream);
-				});
-			} catch (error) {
-				this.handleError(error, ProcessSetup, null, stream.errors);
+		return new Promise((resolve, reject) => {
+			input = this.newInput(input);
+			output = this.newOutput(input, output);
+			const stream = {input, output, errors: [], error: null}; // 增加一个当前的错误
+			console.log('1');
+			callbackReturn(this.setup, this, [stream]).then(() => {
+				console.log('then');
 				resolve(stream);
-			}
+			}).catch(error => {
+				console.log('catch');
+				try {
+					this._handleError(error, ProcessSetup, stream);
+					resolve(stream);
+				} catch (e) {
+					reject(stream);
+				}
+			});
+			// try {
+				// Promise.resolve(this.setup(stream)).catch(error => {
+				// 	console.log(error);
+				// 	try {
+				// 		this._handleError(error, ProcessSetup, stream);
+				// 		resolve(stream);
+				// 	} catch (e) {
+				// 		reject(stream);
+				// 	}
+				// }).then((/* ignore */) => {
+				// 	resolve(stream);
+				// });
+			// } catch (error) {
+			// 	this._handleError(error, ProcessSetup, stream);
+			// 	resolve(stream);
+			// }
 		});
 	}
 
@@ -268,7 +297,7 @@ class Loader {
 	 *   必须严格使用 `resolve` 和 `reject` ，仅且应该只使用这两个方式，来传递数据或者对象（这比上述一点的要求更进一步，更严格了）。
 	 * - 所以，总结而言，在 `Promise` 中，抛出异常应该尽量使用 `resolve` 或 `reject`，特别是在异步中再执行异步时，问题将变得更加复杂。
 	 *
-	 * @param {{input: {}, output: {}}} loadStream
+	 * @param {{input: {}, output: {}, errors: array}} loadStream
 	 */
 	setup(loadStream) {
 	}
@@ -289,7 +318,7 @@ class Loader {
 	 *
 	 * 在接口中未执行异步调用（异步中的异步），可直接使用 `throw new Error` 来抛出异常，简化代码，减少结构控制的代码量。
 	 *
-	 * @param {{input: {}, output: {}}} loadStream
+	 * @param {{input: {}, output: {}, errors: array}} loadStream
 	 */
 	beforeLoad(loadStream) {
 	}
@@ -299,7 +328,7 @@ class Loader {
 	 *
 	 * 请参考 `setup` 和 `beforeLoad` 的注释说明
 	 *
-	 * @param args
+	 * @param {{input: {}, output: {}, errors: array}} loadStream
 	 */
 	doLoad(loadStream) {
 		throw new Error(`Loader.doLoad is an abstract method, please overload in ${this.constructor.name}!`);
@@ -308,51 +337,34 @@ class Loader {
 	/**
 	 * `load` 的后置接口
 	 *
-	 * @param args
+	 * @param {{input: {}, output: {}, errors: array}} loadStream
 	 */
 	afterLoad(loadStream) {
 	}
 
-	load(args) {
+	load(input = undefined) {
 		return new Promise((resolve, reject) => {
-			try {
-				this.newLoadStream().then(loadStream => {
-					callbackReturn(this.beforeLoad, this, [loadStream]).then((/* ignore here */) => {
-						callbackReturn(this.doLoad, this, [loadStream]).then((/* ignore here */) => {
-							callbackReturn(this.afterLoad, this, [loadStream]).then((/* ignore here */) => {
-								resolve(loadStream);
-							}).catch(err => {
-								this.handleError(err, ProcessAfter, reject);
-							});
+			this.newLoadStream(input).then(loadStream => {
+				callbackReturn(this.beforeLoad, this, [loadStream]).then((/* ignore here */) => {
+					callbackReturn(this.doLoad, this, [loadStream]).then((/* ignore here */) => {
+						callbackReturn(this.afterLoad, this, [loadStream]).then((/* ignore here */) => {
+							resolve(loadStream);
 						}).catch(err => {
-							this.handleError(err, ProcessDoing, reject);
+							this.handleError(err, ProcessAfter, reject, loadStream.errors);
 						});
 					}).catch(err => {
-						this.handleError(err, ProcessBefore, reject);
+						this.handleError(err, ProcessDoing, reject, loadStream.errors);
 					});
+				}).catch(err => {
+					this.handleError(err, ProcessBefore, reject, loadStream.errors);
 				});
-				// const cloneArgs = this.mergeArgs(args);
-				// Promise.resolve(this.setup(cloneArgs)).catch(err => {
-				// 	this.handleError(err, ProcessSetup, null);
-				// }).finally(() => {
-				// 	callbackReturn(this.beforeLoad, this, [cloneArgs]).then((/* ignore here */) => {
-				// 		callbackReturn(this.doLoad, this, [cloneArgs]).then((/* ignore here */) => {
-				// 			callbackReturn(this.afterLoad, this, [cloneArgs]).then((/* ignore here */) => {
-				// 				resolve(this.result);
-				// 			}).catch(err => {
-				// 				this.handleError(err, ProcessAfter, reject);
-				// 			});
-				// 		}).catch(err => {
-				// 			this.handleError(err, ProcessDoing, reject);
-				// 		});
-				// 	}).catch(err => {
-				// 		this.handleError(err, ProcessBefore, reject);
-				// 	});
-				// });
-			} catch (err) {
-				this.handleError(err, ProcessSetup, reject);
-			}
+			}).catch(loadStream => {
+				resolve(loadStream);
+			});
 		});
+	}
+
+	loadSilent(input = undefined) {
 	}
 }
 

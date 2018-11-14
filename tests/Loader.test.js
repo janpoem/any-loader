@@ -18,7 +18,7 @@ class TestURL {
 	}
 }
 
-class TeseResponse {
+class TestResponse {
 
 	constructor(url) {
 		this.url = url;
@@ -27,18 +27,18 @@ class TeseResponse {
 	}
 }
 
-class TestLoader2 extends Loader {
+class TestOverloadInputOutputLoader extends Loader {
 
 	newInput(input) {
 		return new TestURL(this.mergeArgs(input));
 	}
 
 	newOutput(input, output) {
-		return new TeseResponse(input);
+		return new TestResponse(input);
 	}
 }
 
-class TestLoader3 extends TestLoader2 {
+class TestDoAnythingInSetupLoader extends TestOverloadInputOutputLoader {
 
 	setup({input, output}) {
 		const {query} = input;
@@ -50,7 +50,7 @@ class TestLoader3 extends TestLoader2 {
 	}
 }
 
-class TestLoaderThrowError extends TestLoader2 {
+class TestThrowErrorInSetupLoader extends TestOverloadInputOutputLoader {
 
 	setup({input, output}) {
 		const {query} = input;
@@ -60,7 +60,7 @@ class TestLoaderThrowError extends TestLoader2 {
 	}
 }
 
-class TestLoaderAsyncSetup extends TestLoader2 {
+class TestAsyncSetupLoader extends TestOverloadInputOutputLoader {
 
 	setup({input, output}) {
 		const {query} = input;
@@ -74,6 +74,35 @@ class TestLoaderAsyncSetup extends TestLoader2 {
 				}
 			}, 2000);
 		})
+	}
+}
+
+class TestBreakInSetupLoader extends TestAsyncSetupLoader {
+
+	isThrowError(error, process) {
+		if (process === 'setup') return true;
+		return super.isThrowError(error, process);
+	}
+
+	doLoad(stream) {
+		throw new Error('doLoad');
+	}
+}
+
+class TestSyncBeforeLoadLoader extends TestOverloadInputOutputLoader {
+
+	beforeLoad({input}) {
+		if (typeof input.sync === 'undefined' || input.sync === null) {
+			throw new Error('error in beforeLoad');
+		}
+	}
+
+	doLoad({input}) {
+		input.sync += 1;
+
+		if (input.sync > 3) {
+			throw new Error('error in doLoad')
+		}
 	}
 }
 
@@ -120,7 +149,7 @@ describe('any-loader 测试', () => {
 	});
 
 	it('test newInput/newOutput', async () => {
-		const l2 = new TestLoader2({
+		const l2 = new TestOverloadInputOutputLoader({
 			// 默认构造参数
 			url:   'https://www.oschina.net',
 			query: {key: 1}
@@ -156,7 +185,7 @@ describe('any-loader 测试', () => {
 	});
 
 	it('test basic setup', async () => {
-		const l33 = new TestLoader3({
+		const l33 = new TestDoAnythingInSetupLoader({
 			// 默认构造参数
 			url:   'https://www.oschina.net',
 			query: {name: 'Janpoem'}
@@ -176,7 +205,7 @@ describe('any-loader 测试', () => {
 	});
 
 	it('test sync setup throw error', async () => {
-		const loaderThrowError = new TestLoaderThrowError({
+		const loaderThrowError = new TestThrowErrorInSetupLoader({
 			// 默认构造参数
 			url:   'https://www.oschina.net',
 			query: {name: 'Janpoem'}
@@ -192,30 +221,77 @@ describe('any-loader 测试', () => {
 
 	// jest 设置了 promise 的 timeout 所以，为了省事，异步要单独进行测试
 	it('test async setup throw error #1', async () => {
-		const loaderThrowError = new TestLoaderAsyncSetup({
+		const loaderThrowError = new TestAsyncSetupLoader({
 			// 默认构造参数
 			url:   'https://www.oschina.net',
 			query: {name: 'Janpoem'}
 		});
 
-		const start = new Date();
 		const s1 = await loaderThrowError.newLoadStream();
 		expect(s1.errors.length).toBeGreaterThanOrEqual(1);
 		expect(s1.errors[0].message).toBe('just throw error async');
-
-		console.log((new Date()).valueOf() - start.valueOf()); // 这里应该有2000以上的时间经过
 	});
 
 	it('test async setup throw error #2', async () => {
-		const loaderThrowError = new TestLoaderAsyncSetup({
+		const loaderThrowError = new TestAsyncSetupLoader({
 			// 默认构造参数
 			url:   'https://www.oschina.net',
 			query: {name: 'Janpoem'}
 		});
 
-		const start = new Date();
 		const s2 = await loaderThrowError.newLoadStream({query: {id: 1}});
 		expect(s2.errors.length).toBe(0);
-		console.log((new Date()).valueOf() - start.valueOf()); // 这里应该有2000以上的时间经过
+	});
+
+	it('test async setup throw error #3 - test stream.error', () => {
+		const loaderThrowError = new TestBreakInSetupLoader({
+			// 默认构造参数
+			url:   'https://www.oschina.net',
+			query: {name: 'Janpoem'}
+		});
+
+		loaderThrowError.newLoadStream().then(stream => {
+			console.log(1);
+		}).catch((stream) => {
+			console.log(2);
+		})
+
+		// try {
+		// 	const stream = await loaderThrowError.newLoadStream();
+		// } catch (stream) {
+		// 	console.log(stream);
+		// }
+		// expect(s1.error.message).toBe('just throw error async');
+	});
+
+	it('test async setup throw error #4 - test load break in setup', async () => {
+		const loaderThrowError = new TestBreakInSetupLoader({
+			// 默认构造参数
+			url:   'https://www.oschina.net',
+			query: {name: 'Janpoem'}
+		});
+
+		const s1 = await loaderThrowError.load();
+		expect(s1.error.message).toBe('just throw error async');
+	});
+
+	it('test sync beforeLoad #1 throw error', () => {
+		const loader = new TestSyncBeforeLoadLoader({
+			// 默认构造参数
+			url:   'https://www.oschina.net',
+			query: {name: 'Janpoem'}
+		});
+
+		loader.load().catch(err => {
+			expect(err.message).toEqual('error in beforeLoad');
+		});
+
+		loader.load({sync: 1}).then(({input}) => {
+			expect(input.sync).toBe(2);
+		});
+
+		loader.load({sync: 5}).catch(err => {
+			expect(err.message).toEqual('error in doLoad');
+		});
 	});
 });
