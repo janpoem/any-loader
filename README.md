@@ -1,162 +1,270 @@
-# any-loader - 数据加载器中间件
 
-any-loader 旨在为 node.js 和前端的 javascript 提供一个自由度较高的数据加载器中间件类库。本身并不实现任何数据加载器的实现逻辑，只界定了数据
-流走向的标准接口 `newLoadStrem -> setup -> beforeLoad -> doLoad -> afterLoad` ，调用顺序（不可逆），以及此过程中的异常错误处理机制。
+# any-loader - 数据加载器中间件  
+  
+any-loader 旨在为 node.js 和其他的 javascript 提供一个可定制程度较高的数据加载器中间件类库。本身并不实现任何数据加载器的实现逻辑，只界定了数据流走向的标准接口 newLoadStrem -> setup -> beforeLoad -> doLoad -> afterLoad ，调用顺序（不可逆），以及此过程中的异常错误处理机制。  
+  
+any-loader 支持并实现了以下编程特性：  
+  
+- 基于AOP设计，支持异步（Promise）。  
+- 中间件形态，不干涉业务逻辑和底层实现。  
+- 使用OOP进行扩展，使用继承和方法重载，来进行子类的开发，并提供丰富的方法以控制的粒度。  
+- 接口基于 Promise 封装，向后兼容 async/await 语法  
+- 数据流（LoadStream）部分，使用 fp 编程，数据流持有的 input, output 等数据，只在接口中流转，结束后即作废。 Loader 本身无状态，不持有过程数据。  
+  
+## 安装说明  
+  
+```shell
+npm install any-loader
+```
 
-any-loader 支持并实现了以下编程特性：
-
-- 基于AOP设计，支持异步（Promise）。
-- 中间件形态，不干涉业务逻辑和底层。
-- 使用OOP进行扩展，基于继承和方法重载，进行具体的业务和数据加载，提供丰富的方法以满足各种需求。
-- 兼容 async/await 语法
-- 数据流部分，使用 fp 编程，数据流持有的 `input`, `output` 等数据，只在当前接口中流转，结束后即作废。 Loader 本身无状态，不持有过程数据。
-
-## 安装说明
-
-暂缺，目前还未完成第一个版本的单元测试，暂时不会发布到npm。
+```shell
+yarn add any-loader
+```
 
 ## 使用说明
 
+一般实现了自己的 Loader 后，使用时主要使用 `load` 方法：
+
 ```js
-class ImageLoader extends Loader {
-	
-	// 默认形态下，input, output 是标准 {}
-	doLoad({input, output, errors}) {
-		return new Promise((resolve, reject) => {
-			const image = new Image();
-            image.onload = function(ev) {
-                output.image = this;
-                output.width = this.width;
-                output.height = this.height;
-                resolve();
-            };
-            image.onerror = (ev) => {
-                reject(new Error('图片加载失败！'));
-            };
-            image.src = input.url;
-		});
+class UserLoader extends Loader {
+	doLoad() {
+		// do something...
 	}
 }
 
-const loader = new ImageLoader();
-loader.load({url: 'https://www.oschina.net/build/oschina/components/imgs/header/logo.svg'}).then(({output}) => {
-}).catch(error => {
+const loader = new UserLoader();
+loader.load({/* 一些参数 */}).then().catch();
+```
+
+`load` 方法，主要按照以下流程执行：
+
+```js
+newLoadStream() => newInput() => newOutput() => setup(loadStream)
+                                                      |
+                                           beforeLoad(loadStream) => reject(err)?
+                                                      |
+                                               doLoad(loadStream) => reject(err)?
+                                                      |
+                                            afterLoad(loadStream) => reject(err)?
+```
+
+当 `load` 过程发生错误时，不管用户在实际代码层面抛出（和reject）任何数据或者异常，进入到 Loader 层面，会将其再次包裹成一个 `LoadStreamError` 的对象。
+
+```ts
+const err: LoadStreamError = {
+	error: * // 错误异常的实例，可以是任何类型不一定非要是一个Error
+	name: string, // 默认值 LoadStreamError
+	process: string // 字符串类型，表示错误属于哪个过程中抛出的，[setup|before|doing|after]
+	stream: { // 发生错误时的 LoadStream 实例
+		input: {},   // 输入参数，最起码应该是一个 plainObject 
+		output: {},  // 输出对象，最起码应该是一个 plainObject 
+		errors: [],  // 错误堆
+		error: LoadStreamError // 当前错误异常
+	},
+	message: [getter],
+}
+```
+
+决定 Loader 在处理是否将异常抛出，由方法 `isThrowError` 决定。
+
+## Loader 可重载的方法说明
+
+```js
+setup(loadStream)
+
+// or 
+
+setup({input, output, errors, error})
+```
+
+LoadStream 初始化时的接口，Loader的默认行为，该接口执行过程中的异常错误不会被抛出和reject，不管什么情况都会朝下一个接口去执行（可通过重载  `isThrowError` 方法来改变其是否抛出setup的异常）。
+
+但在setup中使用 `throw` 可能会导致 setup 内的结构控制失效，所以请确定的确了解 `throw` 可能带来的影响。
+
+```js
+beforeLoad(loadStream)
+```
+
+load 前置接口，该接口中的抛出错误和reject会阻止下一个接口的执行。
+
+```js
+doLoad(loadStream)
+```
+
+load 的实际执行方法，继承的子类应该优先重载该方法以实现 Loader 具体的逻辑。
+
+但目前来说，beforeLoader, doLoad, afterLoad 并没有明确区别，只是先后执行的顺序。
+
+```js
+afterLoad(loadStream)
+```
+
+load 的后置接口，参考 `beforeLoad` 和 `doLoad`
+
+```js
+newInput(input)
+```
+
+在 `newLoadStream` 时候，生成作为 `load` 的 `input` 输入参数实例，可重载这个方法，以返回实际开发场景中所需要的输入实例。
+
+但最好返回类实例或者一个 plainObject，而不要是值类型（string，boolean, number），函数也不推荐。
+
+```js
+newOutput(input, output)
+```
+
+在 `newLoadStream` 时候，生成用于承载 `load` 的 `output` 输出实例，可重载这个方法，以返回实际开发场景中所需要的输出实例。
+
+同 `newInput` ，最好返回一个类实例或者 plainObject。
+
+并且该方法的参数中的 `input` 必然是基于用户重载 `newInput` 返回的结果。
+
+```js
+isThrowError(error, process)
+```
+
+用于判断是否将某个过程，或者某些特定的 Error 抛出（或reject），用户可重载该方法，使 Loader 彻底成为静默的模式，或者根据 Error 类来决定是否抛出。
+
+```js
+isPlainObject(obj)
+getPlainObject(obj, defaultObj)
+isValidArgs(args)
+getValidArgs(args, defaultArgs)
+```
+
+这几个方法的重载，也会对 Loader 的形成产生比较大的影响，属于 Loader 比较基础的方法群， 但一般而言，直接重载 `newInput` 和 `newOutput` 能满足大多数场景使用需求。
+
+__不推荐__ 对 `newLoadStream` 和 `load` 方法重载。
+
+## 简单的例子  
+
+  
+```js  
+class ImageLoader extends Loader {  
+     
+   // 默认形态下，input, output 是标准 {}  
+   doLoad({input, output, errors}) {  
+      return new Promise((resolve, reject) => {  
+         const image = new Image();  
+            image.onload = function(ev) {  
+                output.image = this;  
+                output.width = this.width;  
+                output.height = this.height;  
+                resolve();  
+            };  
+            image.onerror = (ev) => {  
+                reject(new Error('图片加载失败！'));  
+            };  
+            image.src = input.url;  
+      });
+   }  
+}  
+  
+const loader = new ImageLoader();  
+loader.load({url: 'https://www.oschina.net/build/oschina/components/imgs/header/logo.svg'}).then(({output}) => {  
+}).catch(error => {  
 });
-```
-
-嗯，这么看，似乎没什么，但，同样的例子，我们可以进行一个更具体的扩展：
-
+```  
+ 
 ```js
-
-// 我们先定义了一个远程的URL类，或者你的项目本身就有类似的设定
-class RemoteURL {
-	
-	constructor() {
-		// ....
-	}
-	
-	toURL() {
-		return '...';
-	}
-}
-
-// 再顶一个远程的图片类
-class RemoteImage {
-	
-	constructor(remoteUrl) {
-        this.url = remoteUrl; // 这是一个RemoteURL的实例
-        this.isLoad = false;
-        this.image = null;
-        this.error = null;
-    }
-    
-    load(image) {
-		this.isLoad = true;
-		this.image = image;
-    }
-    
-    error(error) {
-		this.error = error;
-    }
-}
-
-class ImageLoader extends Loader {
-	
-	// 我们将 RemoteURL 的实例，作为 LoadStream 的 input
-	newInput(input) {
-        return new RemoteURL(this.mergeArgs(input));
-    }
-
-    newOutput(input, output) {
-		// 到这里时，input已经变为 RemoteURL 的实例
-        return new RemoteImage(input);
-    }
-    
-    // input => RemoteURL, output => RemoteImage
-    doLoad({input, output, errors}) {
-        return new Promise((resolve, reject) => {
-            const image = new Image();
-            image.onload = function(ev) {
-                output.load(this);
-                resolve();
-            };
-            image.onerror = (ev) => {
-            	output.error(new Error('图片加载失败！'));
-            	reject(output.error);
-            };
-            image.src = input.toURL();
-        });
-    }
-}
-
-// 调用代码
-const loader = new ImageLoader();
-loader.load({url: 'https://www.oschina.net/build/oschina/components/imgs/header/logo.svg'}).then(({output}) => {
-}).catch(error => {
-});
+// 我们先定义了一个远程的URL类，或者你的项目本身就有类似的设定  
+class RemoteURL {  
+     
+   constructor() {  
+      // ....  
+   }  
+     
+   toURL() {  
+      return '...';  
+   }  
+}  
+  
+// 再顶一个远程的图片类  
+class RemoteImage {  
+     
+   constructor(remoteUrl) {  
+        this.url = remoteUrl; // 这是一个RemoteURL的实例  
+        this.isLoad = false;  
+        this.image = null;  
+        this.error = null;  
+    }  
+      
+    load(image) {  
+      this.isLoad = true;  
+      this.image = image;  
+    }  
+      
+    error(error) {  
+      this.error = error;  
+    }  
+}  
+  
+class ImageLoader extends Loader {  
+     
+   // 我们将 RemoteURL 的实例，作为 LoadStream 的 input  
+   newInput(input) {  
+        return new RemoteURL(this.mergeArgs(input));  
+    }  
+  
+    newOutput(input, output) {  
+      // 到这里时，input已经变为 RemoteURL 的实例  
+        return new RemoteImage(input);  
+    }  
+      
+    // input => RemoteURL, output => RemoteImage  
+    doLoad({input, output, errors}) {  
+        return new Promise((resolve, reject) => {  
+            const image = new Image();  
+            image.onload = function(ev) {  
+                output.load(this);  
+                resolve();  
+            };  
+            image.onerror = (ev) => {  
+               output.error(new Error('图片加载失败！'));  
+               reject(output.error);  
+            };  
+            image.src = input.toURL();  
+        });  
+    }  
+}  
+  
+// 调用代码  
+const loader = new ImageLoader();  
+loader.load({url: 'https://www.oschina.net/build/oschina/components/imgs/header/logo.svg'}).then(({output}) => {  
+}).catch(error => {  
+});  
 ```
+  
+## 注意事项  
+  
+在 `setup` `beforeLoad` `doLoad` `afterLoad` 中，异常的处理，和异步的异常处理，需要特别注意：
+  
+```js  
+class MyLoader extends Loader {  
 
-是的，调用代码不变（应用层不变），可是中间可控制的粒度和维度，就拓宽了很多。程序员的价值，不在于围绕业务写了多少业务逻辑的实现代码，而在于拥有多
-少手段去针对业务需求，设计类，设计接口，乃至到设计系统，设计架构。
-
-这个也只是初级的拓展而已，实际上还有更进一步的拓宽，但暂时先不说了，等完成第一版本在更新了。
-
-## 注意事项
-
-在加载流初始化的阶段，也即 `newLoadStrem -> setup` 里，setup 接口发生的错误异常，不会被 reject 或者 throw。也即，这个过程，属于静默模式
-，在这个过程中所发生的错误，将会传递到下一个接口 `beforeLoad` 的参数 `stream.errors` 中呈现。
-
-而 `beforeLoad -> doLoad -> afterLoad` 这个流程中，任意环节中发生的错误异常，将中断当前流程，不再往下执行，并及时的 reject 异常。
-
-在接口中的编程中，如果不使用异步，可直接通过 throw 的方式，来中断执行当前流程，显然，这里终于可以摆脱结构控制和花括号密集恐惧症的束缚了。
-
-如：
-
-```js
-class MyLoader extends Loader {
-	
-	beforeLoad(stream) {
-		throw new Error('就是不让你执行下去！');
+	setup(stream) {
+		if (true)
+			throw new Error('就是任性抛出错误');
+		// 因为上面已经抛出错误了，所以后面这里就不会再被执行到了，
+		// setup 本身默认是不会抛出异常的，这就会导致 setup 的逻辑没有完全被执行
 	}
-}
-```
 
-如果在接口中，使用了异步，乃至异步中还嵌套着异步，在未使用 async/await （这个只要依旧 throw 就完事了）的条件下，需要严格遵守以下的约定（以下约
-定通用于`setup / beforeLoad / doLoad / afterLoad`）：
-
-- 接口允许调用异步方法（比如异步打开文件，异步请求服务器令牌之类），使用异步，必须确保这个接口 `return new Promise()` ，以使得其能和后面的数
-据流接口对接（包括兼容 async/await）。
-- 使用 `Promise` 时，必须明确执行 `resolve` 或 `reject` （特别是逻辑上，最低限度必须有其中一者被执行到，特别要注意，必须检查你的结构控制代
-码，避免实际上未执行情况。），因为 `Promise` 设计上，就必须有明确的结果（`resolve` 或 `reject`），否则将会使 `Promise` 看似跳空未执行，
-实际上这个 `Promise` 一直被挂起了，等待结束（jest中，Promise指定了默认的超时时间，所以会强制抛出一个错误）。
-- 如果 `Promise` 中，还存在另一个异步（比如setTimeout，他实际上并不是和 `Promise` 在一个层面的线程管理中 —— 某程度可以这么理解），这时候，
-尤其是在 node.js 环境下，就会出现写入对象属性丢失的问题，这实际上就是 C# Java 常说的线程安全问题，所以，在 `Promise` 必须严格使用 
-`resolve` 和 `reject` ，仅且应该只使用这两个方式（不要使用throw），来传递数据或者对象。
-
-__未完待续__
-
-
-
-
-
-
+   beforeLoad(stream) {  
+      return new Promise((resolve, reject) => {
+	      // 这里我偷个懒，以 timeout 模拟一个异步请求
+	      setTimeout(() => {
+		      // 这里如果出现异常，应该使用 reject(xxxx) 的方式
+		      if (stream.input.anything === true) {
+			      reject(new Error('就是出错了！'));
+		      }
+		      resolve(); // 最终这个 promise 必须有一个明确的 resolve ，否则这个 promise 就一直被挂起的状态（视乎不同的平台实现，还有ES的版本，但就Promise而言，不resolve是错误的。）
+		      // 特别特别，不要在这样的回调中使用 throw new Error()
+		      // 这表示这个回调函数抛出了一个异常，但并不直接和 Promise 有直接的关系，这在不同的JS平台，会有不同的处理方式，所以尽量在这里使用 throw
+	      }, 3000);
+      });
+   }  
+}  
+```  
+ 
+在将一个 `new Promise` 的实例提供给别人使用时，存在许多技术黑洞和坑（不同JS平台的实现和当前ES的Promise实现的版本的缺陷导致），所以本类库已经转用 bluebird 所提供的 Promise。
+ 
