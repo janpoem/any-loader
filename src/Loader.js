@@ -2,35 +2,53 @@
 
 const toString = Object.prototype.toString;
 const isArray = Array.isArray;
-const OrigPromise = global.Promise;
 
-const Promise = require('bluebird');
+const BluebirdPromise = require('bluebird');
 const merge = require('deepmerge');
 
-
-const callbackReturn = (callback, binder, args) => {
+const callbackAsPromise = (callback, binder, args, resolve, reject) => {
 	if (typeof callback === 'function') {
 		// 过滤binder
 		if (typeof binder !== 'object') binder = null;
 		// 过滤args
 		if (typeof args === 'undefined') args = [];
 		else if (!isArray(args)) args = [args];
-
+		
 		try {
-			return callbackReturn(callback.apply(binder, args), binder, args);
+			return callbackAsPromise(callback.apply(binder, args), binder, args);
 		} catch (err) {
-			return Promise.reject(err);
+			return BluebirdPromise.reject(err);
 		}
-	} else if (callback instanceof Error) {
-		return Promise.reject(callback);
 	}
-	else if (callback instanceof OrigPromise) {
-		return new Promise(callback); // 原生的 Promise 对象，要强制转换一下
+	else if (callback instanceof Error) {
+		return BluebirdPromise.reject(callback);
 	}
-	else if (callback instanceof Promise) {
+	else if (isArray(callback) && callback.length > 0 && typeof resolve === 'function' && typeof reject ===
+	         'function') {
+		const item = callback.shift();
+		return callbackAsPromise(item, binder, args).then(() => {
+			if (callback.length > 0) {
+				callbackAsPromise(callback, binder, args, resolve, reject);
+			} else {
+				resolve();
+			}
+		}).catch(reject);
+	}
+	// else if (callback instanceof Promise) {
+	// 	// return new Promise((resolve, reject) => {
+	// 	// 	callback.then(() => {
+	// 	// 		resolve();
+	// 	// 	}).catch(err => {
+	// 	// 		reject(err);
+	// 	// 	});
+	// 	// });
+	// 	// return new bbPromise(callback); // 这里必须强制转换为 bluebird 的 Promise
+	// 	return bbPromise.resolve(callback);
+	// }
+	else if (callback instanceof BluebirdPromise) {
 		return callback;
 	} else {
-		return Promise.resolve(callback);
+		return BluebirdPromise.resolve(callback);
 	}
 };
 
@@ -38,7 +56,7 @@ const callbackReturn = (callback, binder, args) => {
 const isString = (value) => {
 	const type = typeof value;
 	return type === 'string' ||
-		(type === 'object' && value != null && !isArray(value) && toString.call(value) === '[object String]');
+	       (type === 'object' && value != null && !isArray(value) && toString.call(value) === '[object String]');
 };
 
 const ProcessSetup = 'setup';
@@ -50,6 +68,59 @@ const TypeOther = 0;
 const TypeError = 1;
 const TypeString = 2;
 
+class LoadStreamError extends Error {
+	
+	constructor(error, process, stream) {
+		super();
+		this.error = null;
+		this.process = '';
+		this.stream = null;
+		// oh my god....
+		Object.defineProperties(this, {
+			name   : {
+				value       : 'LoadStreamError',
+				writable    : false,
+				enumerable  : true,
+				configurable: false
+			},
+			error  : {
+				value       : error,
+				writable    : false,
+				enumerable  : true,
+				configurable: false
+			},
+			process: {
+				value       : process,
+				writable    : false,
+				enumerable  : true,
+				configurable: false
+			},
+			stream : {
+				value       : stream,
+				writable    : false,
+				enumerable  : true,
+				configurable: false
+			},
+			message: {
+				get: () => {
+					return this.getMessage();
+				}
+			}
+		});
+		
+	}
+	
+	getMessage() {
+		if (this.error instanceof Error || (this.error.message && isString(this.error.message)))
+			return this.error.message;
+		else if (isString(this.error))
+			return this.error;
+		else
+			return this.error + '';
+	}
+}
+
+
 /**
  * 数据库加载器的抽象类
  *
@@ -59,7 +130,7 @@ const TypeString = 2;
  * @property {{}} args
  */
 class Loader {
-
+	
 	/**
 	 * 构建函数
 	 *
@@ -68,15 +139,15 @@ class Loader {
 	constructor(args = undefined) {
 		Object.defineProperties(this, {
 			args: {
-				value:        this.initArgs(args),
-				writable:     false,
-				enumerable:   true,
+				value       : this.initArgs(args),
+				writable    : false,
+				enumerable  : true,
 				configurable: false
 			}
 		});
 	}
-
-
+	
+	
 	/**
 	 * 是否一个普通的 object 对象
 	 *
@@ -89,10 +160,12 @@ class Loader {
 	 * @return {boolean}
 	 */
 	isPlainObject(value) {
+		// return !(typeof value !== 'object' || value === null || isArray(value) ||
+		// 	value instanceof Promise || value instanceof OrigPromise);
 		return !(typeof value !== 'object' || value === null || isArray(value) ||
-			value instanceof Promise || value instanceof OrigPromise);
+		         value instanceof Promise || value instanceof BluebirdPromise);
 	}
-
+	
 	/**
 	 * 基于 value ，返回有效的普通 object 或 defaultObj
 	 *
@@ -104,7 +177,7 @@ class Loader {
 		if (typeof value === 'function') value = value();
 		return this.isPlainObject(value) ? value : (this.isPlainObject(defaultObj) ? defaultObj : {});
 	}
-
+	
 	/**
 	 * 检查一个参数是否为有效的 Loader 构造参数，默认使用的是 `isPlainObject` 的结果，用于提供给后继的类重载该方法
 	 *
@@ -114,16 +187,16 @@ class Loader {
 	isValidArgs(args) {
 		return this.isPlainObject(args);
 	}
-
+	
 	getValidArgs(args, defaultArgs = this.getDefaultArgs()) {
 		if (typeof args === 'function') args = args();
 		return this.isValidArgs(args) ? args : (this.isValidArgs(defaultArgs) ? defaultArgs : {});
 	}
-
+	
 	getDefaultArgs() {
 		return {};
 	}
-
+	
 	/**
 	 * 初始化传入的 args
 	 *
@@ -139,11 +212,11 @@ class Loader {
 		}
 		return args;
 	}
-
+	
 	mergeArgs(args) {
 		return merge(this.args, this.getValidArgs(args));
 	}
-
+	
 	/**
 	 * 生成新的 LoadStream 输入（input）
 	 *
@@ -155,7 +228,7 @@ class Loader {
 	newInput(input) {
 		return this.mergeArgs(input);
 	}
-
+	
 	/**
 	 * 生成新的 LoadStream 输出（output）
 	 *
@@ -166,7 +239,7 @@ class Loader {
 	newOutput(input, output = undefined) {
 		return this.getPlainObject(output);
 	}
-
+	
 	/**
 	 * 判断是否抛出特定的异常（基于 process 和 error 的类型判断），`Loader` 默认的行为以 process 来进行判断
 	 *
@@ -183,49 +256,40 @@ class Loader {
 		}
 		return false;
 	}
-
+	
+	
 	/**
 	 * 错误异常的处理方式
 	 *
 	 * 被 throw 或 reject 的异常，不需要再返回，只返回未被接管的异常，转交给下一个流程进行处理
 	 *
-	 * @param {Error|string} error
+	 * @param {*} error
 	 * @param {string} process
+	 * @param {{}} stream
 	 * @param {function|null|undefined} reject
-	 * @param {array} errors
-	 * @returns {Error|null}
+	 * @returns {this}
 	 */
-	handleError(error, process, reject = null, errors = []) {
-		if (!(error instanceof Error))
-			error = new Error(error + '');
-		if (this.isThrowError(error, process)) {
-			if (typeof reject === 'function')
-				reject(error);
-			// @todo 这里是否还应该考虑在没 reject 的时候，额外的 throw 出异常
-			return null;
-		} else {
-			if (!isArray(errors)) errors = [];
-			errors.push(error);
-			return error;
-		}
-	}
-
-	_handleError(error, process, stream = {}) {
+	handleError(error, process, stream = {}, reject = undefined) {
+		
 		// 过滤一下 error ，确使每个 error 都是 Error 实例
-		if (!(error instanceof Error)) error = new Error(error + '');
-
-		stream = this.getPlainObject(stream, {});
+		if (!(error instanceof LoadStreamError))
+			error = new LoadStreamError(error, process, stream);
+		
 		if (!isArray(stream.errors)) stream.errors = [];
-		stream.errors.push(error); // 不管三七二十一，错误都放入堆栈
+		stream.errors.push(error); // 不管三七二十一，错误都放入堆
 		stream.error = error; // 绑定当前的错误
-
+		
 		if (this.isThrowError(error, process)) {
-			throw error; // 直接抛出错误，简单暴力解决问题
+			if (typeof reject === 'function') {
+				reject(error);
+			} else {
+				throw error;
+			}
 		}
-
+		
 		return this;
 	}
-
+	
 	/**
 	 * 生成一个新的 LoadStream
 	 *
@@ -248,38 +312,17 @@ class Loader {
 			input = this.newInput(input);
 			output = this.newOutput(input, output);
 			const stream = {input, output, errors: [], error: null}; // 增加一个当前的错误
-			console.log('1');
-			callbackReturn(this.setup, this, [stream]).then(() => {
-				console.log('then');
-				resolve(stream);
-			}).catch(error => {
-				console.log('catch');
-				try {
-					this._handleError(error, ProcessSetup, stream);
+			callbackAsPromise(this.setup, this, [stream])
+				.then(() => {
 					resolve(stream);
-				} catch (e) {
-					reject(stream);
-				}
-			});
-			// try {
-				// Promise.resolve(this.setup(stream)).catch(error => {
-				// 	console.log(error);
-				// 	try {
-				// 		this._handleError(error, ProcessSetup, stream);
-				// 		resolve(stream);
-				// 	} catch (e) {
-				// 		reject(stream);
-				// 	}
-				// }).then((/* ignore */) => {
-				// 	resolve(stream);
-				// });
-			// } catch (error) {
-			// 	this._handleError(error, ProcessSetup, stream);
-			// 	resolve(stream);
-			// }
+				})
+				.catch(error => {
+					this.handleError(error, ProcessSetup, stream, reject);
+					resolve(stream);
+				});
 		});
 	}
-
+	
 	/**
 	 * `LoadStream` 的安装接口，每次执行 `load` 都会生成一个新的 `LoadStream`，然后执行一次 `setup` 接口
 	 *
@@ -301,8 +344,8 @@ class Loader {
 	 */
 	setup(loadStream) {
 	}
-
-
+	
+	
 	/**
 	 * ·load· 的前置接口
 	 *
@@ -322,7 +365,7 @@ class Loader {
 	 */
 	beforeLoad(loadStream) {
 	}
-
+	
 	/**
 	 * `load` 实际执行的实现接口， Loader 作为父类，默认会抛出异常，请在继承的子类中扩展。
 	 *
@@ -333,7 +376,7 @@ class Loader {
 	doLoad(loadStream) {
 		throw new Error(`Loader.doLoad is an abstract method, please overload in ${this.constructor.name}!`);
 	}
-
+	
 	/**
 	 * `load` 的后置接口
 	 *
@@ -341,30 +384,29 @@ class Loader {
 	 */
 	afterLoad(loadStream) {
 	}
-
+	
 	load(input = undefined) {
-		return new Promise((resolve, reject) => {
+		return new BluebirdPromise((resolve, reject) => {
 			this.newLoadStream(input).then(loadStream => {
-				callbackReturn(this.beforeLoad, this, [loadStream]).then((/* ignore here */) => {
-					callbackReturn(this.doLoad, this, [loadStream]).then((/* ignore here */) => {
-						callbackReturn(this.afterLoad, this, [loadStream]).then((/* ignore here */) => {
+				let process = ProcessBefore;
+				const onCatch = (err) => {
+					this.handleError(err, process, loadStream, reject);
+					resolve(loadStream);
+				};
+				
+				callbackAsPromise(this.beforeLoad, this, [loadStream]).then((/* ignore here */) => {
+					process = ProcessDoing;
+					callbackAsPromise(this.doLoad, this, [loadStream]).then((/* ignore here */) => {
+						process = ProcessAfter;
+						callbackAsPromise(this.afterLoad, this, [loadStream]).then((/* ignore here */) => {
 							resolve(loadStream);
-						}).catch(err => {
-							this.handleError(err, ProcessAfter, reject, loadStream.errors);
-						});
-					}).catch(err => {
-						this.handleError(err, ProcessDoing, reject, loadStream.errors);
-					});
-				}).catch(err => {
-					this.handleError(err, ProcessBefore, reject, loadStream.errors);
-				});
-			}).catch(loadStream => {
-				resolve(loadStream);
+						}).catch(onCatch);
+					}).catch(onCatch);
+				}).catch(onCatch);
+			}).catch(err => {
+				reject(err);
 			});
 		});
-	}
-
-	loadSilent(input = undefined) {
 	}
 }
 
