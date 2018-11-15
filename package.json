@@ -1,6 +1,6 @@
 {
   "name": "any-loader",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Middleware of data loader",
   "keywords": [
     "data loader",
@@ -10,7 +10,7 @@
   "license": "MIT",
   "scripts": {
     "test": "jest Loader.test.js",
-    "build:cjs": "babel src/Loader.js --out-file dist/any-loader.cjs.js",
+    "build": "babel src/Loader.js --out-file index.js",
     "build:bundle": "webpack -p"
   },
   "engines": {
