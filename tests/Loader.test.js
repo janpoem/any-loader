@@ -1,6 +1,7 @@
 'use strict';
 
-const Loader = require('../src/Loader');
+// const Loader = require('../src/Loader');
+import Loader from '../index';
 
 // jest.useFakeTimers();
 

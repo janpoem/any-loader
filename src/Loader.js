@@ -3,8 +3,8 @@
 const toString = Object.prototype.toString;
 const isArray = Array.isArray;
 
-const BluebirdPromise = require('bluebird');
-const merge = require('deepmerge');
+import BluebirdPromise from 'bluebird';
+import merge from 'deepmerge';
 
 const callbackAsPromise = (callback, binder, args, resolve, reject) => {
 	if (typeof callback === 'function') {
@@ -383,18 +383,18 @@ class Loader {
 	
 	load(input = undefined) {
 		return new BluebirdPromise((resolve, reject) => {
-			this.newLoadStream(input).then(loadStream => {
+			return this.newLoadStream(input).then(loadStream => {
 				let process = ProcessBefore;
 				const onCatch = (err) => {
 					this.handleError(err, process, loadStream, reject);
 					resolve(loadStream);
 				};
 				
-				callbackAsPromise(this.beforeLoad, this, [loadStream]).then((/* ignore here */) => {
+				return callbackAsPromise(this.beforeLoad, this, [loadStream]).then((/* ignore here */) => {
 					process = ProcessDoing;
-					callbackAsPromise(this.doLoad, this, [loadStream]).then((/* ignore here */) => {
+					return callbackAsPromise(this.doLoad, this, [loadStream]).then((/* ignore here */) => {
 						process = ProcessAfter;
-						callbackAsPromise(this.afterLoad, this, [loadStream]).then((/* ignore here */) => {
+						return callbackAsPromise(this.afterLoad, this, [loadStream]).then((/* ignore here */) => {
 							resolve(loadStream);
 						}).catch(onCatch);
 					}).catch(onCatch);
@@ -406,4 +406,4 @@ class Loader {
 	}
 }
 
-module.exports = Loader;
+export default Loader;

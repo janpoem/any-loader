@@ -1,1 +1,1 @@
-module.exports = require('./src/Loader.js');
+export {default} from './src/Loader';

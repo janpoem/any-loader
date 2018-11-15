@@ -1,6 +1,6 @@
 {
   "name": "any-loader",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Middleware of data loader",
   "keywords": [
     "data loader",
@@ -9,10 +9,33 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "test": "jest Loader.test.js"
+    "test": "jest Loader.test.js",
+    "build:cjs": "babel src/Loader.js --out-file dist/any-loader.cjs.js",
+    "build:bundle": "webpack -p"
+  },
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "jest": {
+    "transform": {
+      "^.+\\.jsx?$": "babel-jest"
+    }
   },
   "devDependencies": {
-    "jest": "^23.6.0"
+    "@babel/cli": "^7.1.5",
+    "@babel/core": "^7.1.6",
+    "@babel/plugin-proposal-class-properties": "^7.1.0",
+    "@babel/plugin-proposal-object-rest-spread": "^7.0.0",
+    "@babel/plugin-transform-block-scoping": "^7.1.5",
+    "@babel/plugin-transform-computed-properties": "^7.0.0",
+    "@babel/plugin-transform-runtime": "^7.1.0",
+    "@babel/preset-env": "^7.1.6",
+    "babel-core": "7.0.0-bridge.0",
+    "babel-jest": "^23.6.0",
+    "babel-loader": "^8.0.4",
+    "jest": "^23.6.0",
+    "webpack": "^4.25.1",
+    "webpack-cli": "^3.1.2"
   },
   "dependencies": {
     "bluebird": "^3.5.3",
