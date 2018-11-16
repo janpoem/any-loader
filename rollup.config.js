@@ -2,7 +2,7 @@ import babel from 'rollup-plugin-babel';
 
 export default [
 	{
-		input:   'Loader.mjs',
+		input:   'src/Loader.mjs',
 		output:  [
 			{file: 'index.js', format: 'cjs', sourcemap: true},
 		],

@@ -268,5 +268,46 @@ class MyLoader extends Loader {
  
 在将一个 `new Promise` 的实例提供给别人使用时，存在许多技术黑洞和坑（不同JS平台的实现和当前ES的Promise实现的版本的缺陷导致），所以本类库已经转用 bluebird 所提供的 Promise。
 
+## mjs和commonjs的问题
 
- 
+mjs 和 commonjs 两个规范这是一个很头疼的问题。
+
+`index.js` 目前以默认的 commonjs 作为基础输出（用rollup构建）。
+
+也即，如下的代码，都是生效的：
+
+```js
+const Loader = require('any-loader'); // 仅在 nodejs 环境下
+
+import Loader from 'any-loader'; // babel 或者 ES 环境下
+```
+
+如果项目使用了 babel-runtime 的，可以考虑引用 `any-loader/Loader` ，只针对 babel 环境。
+
+```js
+import Loader from 'any-loader/Loader'
+```
+
+相应的，在对应项目中的 babel 设置，要针对 exclude 进行如下的设置：
+
+webpack.config.js
+
+```js
+const babel = {
+	test   : /\.m?jsx?$/,
+	exclude: function(modulePath) {
+		// 针对 mjs ，不算在排除的范围内
+		if (/.mjs$/.test(modulePath)) {
+			return false;
+		}
+		return /node_modules/.test(modulePath);
+	},
+	use    : {
+		loader : 'babel-loader',
+		options: {
+			presets: [ /* your presets */ ],
+			plugins: [ /* your plugins */ ]
+		}
+	}
+};
+```

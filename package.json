@@ -7,11 +7,12 @@
     "data loader middleware"
   ],
   "main": "index.js",
-  "module": "Loader.mjs",
+  "module": "Loader.js",
   "files": [
     "index.js",
     "index.js.map",
-    "Loader.mjs"
+    "Loader.js",
+    "src/Loader.mjs"
   ],
   "license": "MIT",
   "scripts": {
