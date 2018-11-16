@@ -1,5 +1,11 @@
 
 # any-loader - 数据加载器中间件  
+
+[![Npm version](https://img.shields.io/npm/v/any-loader.svg)](https://www.npmjs.com/package/any-loader)
+[![Build Status](https://img.shields.io/travis/janpoem/any-loader/master.svg)](https://travis-ci.org/janpoem/any-loader)
+[![Dependencies Status](https://img.shields.io/david/janpoem/any-loader.svg)](https://david-dm.org/janpoem/any-loader)
+
+
   
 any-loader 旨在为 node.js 和其他的 javascript 提供一个可定制程度较高的数据加载器中间件类库。本身并不实现任何数据加载器的实现逻辑，只界定了数据流走向的标准接口 newLoadStrem -> setup -> beforeLoad -> doLoad -> afterLoad ，调用顺序（不可逆），以及此过程中的异常错误处理机制。  
   
