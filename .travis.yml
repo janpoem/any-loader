@@ -1,5 +1,5 @@
 sudo: false
 language: node_js
-rvm:
-- '8'
-- '10'
+node_js:
+- "8"
+- "10"
