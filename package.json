@@ -36,6 +36,9 @@
     "rollup": "^0.67.1",
     "rollup-plugin-babel": "^4.0.3"
   },
+  "resolutions": {
+    "babel-core": "7.0.0-bridge.0"
+  },
   "dependencies": {
     "bluebird": "^3.5.3",
     "deepmerge": "^2.2.1"
