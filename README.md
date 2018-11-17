@@ -17,7 +17,7 @@ any-loader 支持并实现了以下编程特性：
 - 接口基于 Promise 封装，向后兼容 async/await 语法  
 - 数据流（LoadStream）部分，使用 fp 编程，数据流持有的 input, output 等数据，只在接口中流转，结束后即作废。 Loader 本身无状态，不持有过程数据。  
 
-本类库代码优先发布 [码云 - Gitee](https://gitee.com/janpoem/php-trim-plus)，github只用作ci，用中国人自己的代码仓库。
+本类库代码优先发布 [码云 - Gitee](https://gitee.com/)，github只用作ci，用中国人自己的代码仓库，专业私有云代码托管。
 
 ## 安装说明  
   
