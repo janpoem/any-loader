@@ -1,7 +1,7 @@
 {
   "name": "any-loader",
   "version": "0.0.5",
-  "description": "Middleware of data loader. Easy to manage and wrap data API in your application. Support. Compatible with future ES features.",
+  "description": "Middleware of data loader. Easy to manage and wrap data API in your application. Support async/await and Promise. Compatible with future ES features.",
   "repository": "https://gitee.com/janpoem/any-loader.git",
   "keywords": [
     "data loader",
@@ -9,7 +9,9 @@
     "async data loader",
     "LoadStream",
     "AOP data loader",
-    "OOP extend loader"
+    "AOP load stream",
+    "OOP extend loader",
+    "async/await API"
   ],
   "main": "index.js",
   "module": "Loader.js",
