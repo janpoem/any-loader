@@ -1,10 +1,13 @@
 {
   "name": "any-loader",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Middleware of data loader",
+  "repository": "https://gitee.com/janpoem/any-loader.git",
   "keywords": [
     "data loader",
-    "data loader middleware"
+    "data loader middleware",
+    "async data loader",
+    "LoadStream"
   ],
   "main": "index.js",
   "module": "Loader.js",
