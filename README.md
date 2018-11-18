@@ -319,3 +319,9 @@ const babel = {
 	}
 };
 ```
+
+## TODO
+
+- 要增加 dist/bundle.all.js
+- 要增加 dist/bundle.without-bluebird.js
+- 是否将 deepmerge 替换为 lodash/merge ，并打包集成。
