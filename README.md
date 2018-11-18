@@ -320,8 +320,9 @@ const babel = {
 };
 ```
 
+- `dist/any-loader.bundle.js` `dist/any-loader.bundle.umd.js` 打包所有类库为一个文件
+- `dist/any-loader.without-bluebird.js` `dist/any-loader.without-bluebird.umd.js` 不包含 bluebird
+
 ## TODO
 
-- 要增加 dist/bundle.all.js
-- 要增加 dist/bundle.without-bluebird.js
 - 是否将 deepmerge 替换为 lodash/merge ，并打包集成。

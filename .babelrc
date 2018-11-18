@@ -6,20 +6,5 @@
         "useBuiltIns": false
       }
     ]
-  ],
-  "env": {
-    "test": {
-      "presets": [
-        [
-          "@babel/preset-env",
-          {
-            "targets": {
-              "esmodules": true,
-              "node": "8.0.0"
-            }
-          }
-        ]
-      ]
-    }
-  }
+  ]
 }
